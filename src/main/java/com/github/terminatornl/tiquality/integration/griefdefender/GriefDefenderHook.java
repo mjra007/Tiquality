@@ -1,6 +1,5 @@
 package com.github.terminatornl.tiquality.integration.griefdefender;
 
-import com.flowpowered.math.vector.Vector3i;
 import com.github.terminatornl.tiquality.Tiquality;
 import com.github.terminatornl.tiquality.api.Tracking;
 import com.github.terminatornl.tiquality.integration.griefdefender.event.GDClaimCreatedFullyEvent;
@@ -17,6 +16,7 @@ import com.griefdefender.api.claim.ClaimTypes;
 import com.griefdefender.api.event.ChangeClaimEvent;
 import com.griefdefender.api.event.CreateClaimEvent;
 import com.griefdefender.api.event.TransferClaimEvent;
+import com.griefdefender.lib.flowpowered.math.vector.Vector3i;
 import com.mojang.authlib.GameProfile;
 import net.kyori.event.EventSubscriber;
 import net.kyori.event.PostOrders;
@@ -27,6 +27,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.text.TextComponentString;
 import net.minecraft.util.text.TextFormatting;
 import net.minecraftforge.common.MinecraftForge;
+import org.checkerframework.checker.nullness.qual.NonNull;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.world.World;
 
@@ -40,11 +41,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 @SuppressWarnings("NoTranslation")
 public class GriefDefenderHook {
-
-    private static final CreateClaimEventHandler createClaimHandler = new CreateClaimEventHandler();
-    private static final ChangeClaimEventHandler claimChangeHandler = new ChangeClaimEventHandler();
-    private static final TransferClaimEventHandler transferClaimHandler = new TransferClaimEventHandler();
-    //private static final BorderClaimEventHandler borderClaimHandler = new BorderClaimEventHandler();
 
     public static void setClaimTrackers(Claim claim, Tracker tracker, Runnable callback, Runnable beforeRun) {
         Vector3i least = claim.getLesserBoundaryCorner();
@@ -208,22 +204,7 @@ public class GriefDefenderHook {
     }
 
     public static void init() {
-        GriefDefender.getEventManager().getBus().register(CreateClaimEvent.class, createClaimHandler);
-        GriefDefender.getEventManager().getBus().register(ChangeClaimEvent.class, claimChangeHandler);
-        GriefDefender.getEventManager().getBus().register(TransferClaimEvent.class, transferClaimHandler);
-        //GriefDefender.getEventManager().getBus().register(BorderClaimEvent.class, borderClaimHandler);
-
-        Tracking.registerCustomTracker("GDAdmin", AdminClaimTracker.class);
-        MinecraftForge.EVENT_BUS.register(EventHandler.INSTANCE);
-    }
-
-
-    private static class CreateClaimEventHandler implements EventSubscriber<CreateClaimEvent> {
-        @Override
-        public void invoke(@Nonnull CreateClaimEvent event) {
-            /*
-                Using a workaround since the claims are not fully populated yet.
-             */
+        GriefDefender.getEventManager().getBus().subscribe(CreateClaimEvent.class, event -> {
             Tiquality.SCHEDULER.schedule(new Runnable() {
                 @Override
                 public void run() {
@@ -232,76 +213,71 @@ public class GriefDefenderHook {
                     }
                 }
             });
-        }
-    }
-
-    private static class ChangeClaimEventHandler implements EventSubscriber<ChangeClaimEvent> {
-
-        @Override
-        public int postOrder() {
-            return PostOrders.LAST;//Incase event is cancelled.
-        }
-
-        @Override
-        public void invoke(@Nonnull ChangeClaimEvent event) {
-            if(event.cancelled()) {
-                return;
-            }
-
-            if (event instanceof ChangeClaimEvent.Type) {
-                ChangeClaimEvent.Type typeChangeEvent = (ChangeClaimEvent.Type) event;
-                for (Claim claim : event.getClaims()) {
-                    ClaimType originalType = typeChangeEvent.getOriginalType();
-                    ClaimType newType = typeChangeEvent.getType();
-                    if (originalType == ClaimTypes.BASIC || originalType == ClaimTypes.TOWN || originalType == ClaimTypes.SUBDIVISION) {
-                        if (newType == ClaimTypes.ADMIN) {
-                            setClaimTrackers(claim, AdminClaimTracker.INSTANCE, null, null);
-                        }
-                    } else if (originalType == ClaimTypes.ADMIN) {
-                        if (newType == ClaimTypes.BASIC || newType == ClaimTypes.TOWN || newType == ClaimTypes.SUBDIVISION) {
-                            Vector3i lesser = claim.getLesserBoundaryCorner();
-                            Scheduler.INSTANCE.schedule(new Runnable() {
-                                @Override
-                                public void run() {
-                                    final Optional<World> worldOpt = Sponge.getServer().getWorld(claim.getWorldUniqueId());
-                                    //noinspection OptionalIsPresent
-                                    if (worldOpt.isPresent() == false) {
-                                        return;
-                                    }
-
-                                    TiqualityWorld world = (TiqualityWorld) worldOpt.get();
-
-                                    Tracker newTracker = GriefDefenderHook.findOrGetTrackerByClaim(GriefDefender.getCore().getClaimManager(((World) world).getUniqueId()).getClaimAt(lesser));
-                                    if (newTracker == null) {
-                                        return;
-                                    }
-                                    setClaimTrackers(claim, newTracker, null, null);
-                                }
-                            });
-
-                        }
-                    }
-                }
-            } else if (event instanceof ChangeClaimEvent.Resize) {
-                final ChangeClaimEvent.Resize claimEvent = (ChangeClaimEvent.Resize) event;
-                Claim claim = claimEvent.getClaim();
-                Tracker tracker = GriefDefenderHook.findOrGetTrackerByClaim(claim);
-                if (tracker == null) {
+        });
+        GriefDefender.getEventManager().getBus().subscribe(ChangeClaimEvent.class, new com.griefdefender.lib.kyori.event.EventSubscriber<ChangeClaimEvent>() {
+            @Override
+            public void on(@NonNull ChangeClaimEvent event) throws Throwable {
+                if(event.cancelled()) {
                     return;
                 }
-                Tiquality.SCHEDULER.schedule(new Runnable() {
-                    @Override
-                    public void run() {
-                        resizeClaimTrackers(claim, claim.getLesserBoundaryCorner(), claim.getGreaterBoundaryCorner(), tracker, null, null);//TODO verify this acts as expected
-                    }
-                });
-            }
-        }
-    }
 
-    private static class TransferClaimEventHandler implements EventSubscriber<TransferClaimEvent> {
-        @Override
-        public void invoke(@Nonnull TransferClaimEvent event) {
+                if (event instanceof ChangeClaimEvent.Type) {
+                    ChangeClaimEvent.Type typeChangeEvent = (ChangeClaimEvent.Type) event;
+                    for (Claim claim : event.getClaims()) {
+                        ClaimType originalType = typeChangeEvent.getOriginalType();
+                        ClaimType newType = typeChangeEvent.getType();
+                        if (originalType == ClaimTypes.BASIC || originalType == ClaimTypes.TOWN || originalType == ClaimTypes.SUBDIVISION) {
+                            if (newType == ClaimTypes.ADMIN) {
+                                setClaimTrackers(claim, AdminClaimTracker.INSTANCE, null, null);
+                            }
+                        } else if (originalType == ClaimTypes.ADMIN) {
+                            if (newType == ClaimTypes.BASIC || newType == ClaimTypes.TOWN || newType == ClaimTypes.SUBDIVISION) {
+                                Vector3i lesser = claim.getLesserBoundaryCorner();
+                                Scheduler.INSTANCE.schedule(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        final Optional<World> worldOpt = Sponge.getServer().getWorld(claim.getWorldUniqueId());
+                                        //noinspection OptionalIsPresent
+                                        if (worldOpt.isPresent() == false) {
+                                            return;
+                                        }
+
+                                        TiqualityWorld world = (TiqualityWorld) worldOpt.get();
+
+                                        Tracker newTracker = GriefDefenderHook.findOrGetTrackerByClaim(GriefDefender.getCore().getClaimManager(((World) world).getUniqueId()).getClaimAt(lesser));
+                                        if (newTracker == null) {
+                                            return;
+                                        }
+                                        setClaimTrackers(claim, newTracker, null, null);
+                                    }
+                                });
+
+                            }
+                        }
+                    }
+                } else if (event instanceof ChangeClaimEvent.Resize) {
+                    final ChangeClaimEvent.Resize claimEvent = (ChangeClaimEvent.Resize) event;
+                    Claim claim = claimEvent.getClaim();
+                    Tracker tracker = GriefDefenderHook.findOrGetTrackerByClaim(claim);
+                    if (tracker == null) {
+                        return;
+                    }
+                    Tiquality.SCHEDULER.schedule(new Runnable() {
+                        @Override
+                        public void run() {
+                            resizeClaimTrackers(claim, claim.getLesserBoundaryCorner(), claim.getGreaterBoundaryCorner(), tracker, null, null);//TODO verify this acts as expected
+                        }
+                    });
+                }
+            }
+
+            @Override
+            public int postOrder() {
+                return PostOrders.LAST;//Incase event is cancelled.
+            }
+
+        });
+        GriefDefender.getEventManager().getBus().subscribe(TransferClaimEvent.class, event -> {
             for (Claim claim : event.getClaims()) {
                 Tracker tracker = GriefDefenderHook.findOrGetTrackerByClaim(claim);
                 if (tracker == null) {
@@ -309,7 +285,11 @@ public class GriefDefenderHook {
                 }
                 setClaimTrackers(claim, tracker, null, null);
             }
-        }
+        });
+        //GriefDefender.getEventManager().getBus().register(BorderClaimEvent.class, borderClaimHandler);
+
+        Tracking.registerCustomTracker("GDAdmin", AdminClaimTracker.class);
+        MinecraftForge.EVENT_BUS.register(EventHandler.INSTANCE);
     }
 
     /*

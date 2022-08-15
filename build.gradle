@@ -37,12 +37,14 @@ repositories {
         url = 'https://repo.codemc.org/repository/maven-public'
     }
     maven {
-        name = "CurseForge"
-        url = "https://minecraft.curseforge.com/api/maven"
-    }
-    maven {
         name = 'Jitpack.io'
         url = 'https://jitpack.io'
+    }
+
+    maven
+    {
+        name = 'griefdefender'
+        url = 'https://repo.glaremasters.me/repository/bloodshot'
     }
 }
 
@@ -114,26 +116,11 @@ dependencies {
         transitive = true
     }
 
-    /*
-        GriefPrevention
-        Run configuration requires: -Dbstats.relocatecheck="false" in VM options.
-        Caused by module: bstats-sponge
-     */
-    //TODO: Wait for GriefPrevention to update to the latest Sponge API
-    compileOnly 'me.ryanhamshire:griefprevention:1.12.2-4.3.0.662:original'
 
-    compileOnly 'com.github.bloodmc:GriefDefenderAPI:-SNAPSHOT'
-
-
-    /*
-        FTB Utilities
-     */
-    compileOnly 'ftb-utilities:FTBUtilities:5.3.0.52'
-
-    /*
-        FTB Library
-     */
-    compileOnly 'ftblib:FTBLib:5.3.0.56'
+    compileOnly 'com.griefdefender:api:2.1.0-SNAPSHOT'
+    compileOnly "net.kyori:event-api:3.0.0"
+    compileOnly "net.kyori:event-method:3.0.0"
+    compileOnly "net.kyori:event-method-asm:3.0.0"
 
     if(isFat) {
         embed('org.spongepowered:mixin:0.8-SNAPSHOT') {

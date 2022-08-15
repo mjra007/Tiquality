@@ -6,6 +6,7 @@ import com.github.terminatornl.tiquality.interfaces.Tracker;
 import com.griefdefender.api.GriefDefender;
 import com.griefdefender.api.claim.Claim;
 import com.griefdefender.api.claim.ClaimManager;
+import com.griefdefender.lib.flowpowered.math.vector.Vector3i;
 import net.minecraft.util.math.ChunkPos;
 import net.minecraft.world.chunk.Chunk;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
@@ -34,7 +35,8 @@ public class EventHandler {
     public void onSetTracker(TiqualityEvent.SetBlockTrackerEvent e) {
         ClaimManager claimManager = GriefDefender.getCore().getClaimManager(((World) e.getMinecraftWorld()).getUniqueId());
         Location<World> pos = new Location<>((World) e.getMinecraftWorld(), e.getPos().getX(), e.getPos().getY(), e.getPos().getZ());
-        Claim claim = claimManager.getClaimAt(pos.getBlockPosition());
+        Vector3i position  = Vector3i.from(pos.getBlockX(), pos.getBlockY(), pos.getBlockZ());
+        Claim claim = claimManager.getClaimAt(position);
         if (GriefDefenderHook.isValidClaim(claim) == false) {
             return;
         }
